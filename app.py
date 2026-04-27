@@ -41,7 +41,7 @@ def get_spotify_client():
     if "token_info" not in st.session_state:
         auth_url = auth_manager.get_authorize_url()
         st.title("🎵 Generador de Bingo Musical")
-        st.markdown("Per accedir a qualsevol playlist pública, cal que t'autentiquis amb Spotify.")
+        st.markdown("Per accedir a les teves playlists privades, cal que t'autentiquis amb Spotify.")
         st.link_button("🔗 Connectar amb Spotify", auth_url)
         st.stop()
 
