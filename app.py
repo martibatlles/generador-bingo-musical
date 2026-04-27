@@ -291,8 +291,8 @@ st.title("🎵 Generador de Bingo Musical")
 st.write("Enganxa una playlist de Spotify i genera la llista i els cartrons de bingo.")
 
 titol_event = st.text_input("Títol de l'esdeveniment:", placeholder="Ex: Vermut AEIG Sant Pius Xè")
+st.info("⚠️ La playlist ha de ser de la teva biblioteca de Spotify (creada o guardada al teu compte). Les playlists d'altres usuaris no són accessibles per restriccions de l'API de Spotify.\nPer guardar-la al teu compte, fes clic als tres punts de la playlist -> Afegeix a una altra llista -> Nova llista")
 playlist_url = st.text_input("URL de la Playlist de Spotify:")
-
 if playlist_url:
     try:
         if 'cancons_editables' not in st.session_state or st.session_state.get('ultima_url') != playlist_url:
