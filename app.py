@@ -11,8 +11,8 @@ from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
 
-
-
+CLIENT_ID = st.secrets["CLIENT_ID"]
+CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
 REDIRECT_URI = "http://127.0.0.1:8501"
 
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
