@@ -11,16 +11,48 @@ from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
 
-CLIENT_ID = st.secrets["CLIENT_ID"]
-CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
-REDIRECT_URI = "http://127.0.0.1:8501"
+CLIENT_ID     = st.secrets["SPOTIFY_CLIENT_ID"]
+CLIENT_SECRET = st.secrets["SPOTIFY_CLIENT_SECRET"]
+REDIRECT_URI  = st.secrets["SPOTIFY_REDIRECT_URI"]
 
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET,
-    redirect_uri=REDIRECT_URI,
-    scope="playlist-read-private playlist-read-collaborative"
-))
+SCOPE = "playlist-read-private playlist-read-collaborative"
+
+
+def get_spotify_client():
+    auth_manager = SpotifyOAuth(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        redirect_uri=REDIRECT_URI,
+        scope=SCOPE,
+        cache_handler=spotipy.cache_handler.MemoryCacheHandler(
+            token_info=st.session_state.get("token_info")
+        ),
+        show_dialog=False
+    )
+
+    query_params = st.query_params
+    if "code" in query_params and "token_info" not in st.session_state:
+        code = query_params["code"]
+        token_info = auth_manager.get_access_token(code, as_dict=True, check_cache=False)
+        st.session_state["token_info"] = token_info
+        st.query_params.clear()
+        st.rerun()
+
+    if "token_info" not in st.session_state:
+        auth_url = auth_manager.get_authorize_url()
+        st.title("🎵 Generador de Bingo Musical")
+        st.markdown("Per accedir a qualsevol playlist pública, cal que t'autentiquis amb Spotify.")
+        st.link_button("🔗 Connectar amb Spotify", auth_url)
+        st.stop()
+
+    if auth_manager.is_token_expired(st.session_state["token_info"]):
+        token_info = auth_manager.refresh_access_token(
+            st.session_state["token_info"]["refresh_token"]
+        )
+        st.session_state["token_info"] = token_info
+
+    return spotipy.Spotify(auth_manager=auth_manager)
+
 
 # ── PDF llista de cançons ─────────────────────────────────────────────────────
 def generar_pdf(titol_event, cancons):
@@ -55,6 +87,7 @@ def generar_pdf(titol_event, cancons):
     buffer.seek(0)
     return buffer
 
+
 # ── Helpers comuns per als cartrons ──────────────────────────────────────────
 def _setup_cartro(page_w, page_h):
     COLS_GRID, FILES_GRID = 4, 4
@@ -68,12 +101,14 @@ def _setup_cartro(page_w, page_h):
     cel_h = cartro_h / FILES_GRID
     return COLS_GRID, FILES_GRID, marge_ext, col_gap, fila_gap, capçalera, cartro_w, cartro_h, cel_w, cel_h
 
+
 def _posicio(slot, marge_ext, cartro_w, col_gap, capçalera, cartro_h, fila_gap, page_h):
     col_i  = slot % 2
     fila_i = slot // 2
     x0 = marge_ext + col_i * (cartro_w + col_gap)
     y0 = page_h - marge_ext - capçalera - (fila_i + 1) * cartro_h - fila_i * (fila_gap + capçalera)
     return x0, y0
+
 
 def _genera_cartrons_unics(num_cancons, num_cartrons):
     cartrons_generats = set()
@@ -87,6 +122,7 @@ def _genera_cartrons_unics(num_cancons, num_cartrons):
                 cartrons.append(list(nums))
                 break
     return cartrons
+
 
 # ── PDF cartrons amb NÚMEROS ──────────────────────────────────────────────────
 def generar_cartrons_nums(titol_event, num_cancons, num_cartrons):
@@ -144,6 +180,7 @@ def generar_cartrons_nums(titol_event, num_cancons, num_cartrons):
     c.save()
     buffer.seek(0)
     return buffer
+
 
 # ── PDF cartrons amb TÍTOLS de cançons ───────────────────────────────────────
 def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
@@ -241,19 +278,26 @@ def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
     buffer.seek(0)
     return buffer
 
+
 # ── Interfície Streamlit ──────────────────────────────────────────────────────
+sp = get_spotify_client()
+
+with st.sidebar:
+    if st.button("🔓 Desconnectar Spotify"):
+        del st.session_state["token_info"]
+        st.rerun()
+
 st.title("🎵 Generador de Bingo Musical")
 st.write("Enganxa una playlist de Spotify i genera la llista i els cartrons de bingo.")
 
 titol_event = st.text_input("Títol de l'esdeveniment:", placeholder="Ex: Vermut AEIG Sant Pius Xè")
-st.info("⚠️ La playlist ha de ser de la teva biblioteca de Spotify (creada o guardada al teu compte). Les playlists d'altres usuaris no són accessibles per restriccions de l'API de Spotify.\nPer guardar-la al teu compta, fes clic als tres punts de la playlist -> Afegeix a una altra llista -> Nova llista")
 playlist_url = st.text_input("URL de la Playlist de Spotify:")
 
 if playlist_url:
     try:
         if 'cancons_editables' not in st.session_state or st.session_state.get('ultima_url') != playlist_url:
-            cancons_raw = []       # llista de strings "Nom – Artista" per editar
-            cancons_tuples = []    # llista de (nom, artista) per als cartrons de text
+            cancons_raw = []
+            cancons_tuples = []
             results = sp.playlist_items(playlist_url, market="ES")
             while results:
                 for element in results['items']:
