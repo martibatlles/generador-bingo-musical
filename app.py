@@ -1,5 +1,6 @@
 import streamlit as st
 import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, FrameBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -210,39 +211,83 @@ def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
 # ── Interfície Streamlit ──────────────────────────────────────────────────────
 st.title("🎵 Generador de Bingo Musical")
 
-# ── Pas 1: token ──────────────────────────────────────────────────────────────
-with st.expander("🔑 Connecta amb Spotify", expanded='sp' not in st.session_state):
-    st.markdown("""
-**Com obtenir el teu token de Spotify (1 minut, sense instal·lar res):**
+# ── Pas 1: OAuth amb Spotify ──────────────────────────────────────────────────
+REDIRECT_URI = "https://generador-bingo-musical.streamlit.app/"
+SCOPES = "playlist-read-private playlist-read-collaborative"
 
-1. Ves a [developer.spotify.com/console/get-playlist-items](https://developer.spotify.com/console/get-playlist-items) i inicia sessió
-2. Clica el botó verd **"Get token"**
-3. Marca els permisos: ✅ `playlist-read-private` i ✅ `playlist-read-collaborative`
-4. Clica **"Request token"** → inicia sessió si cal
-5. Copia el token llarg que apareix al camp **"OAuth Token"** i enganxa'l aquí:
+# Llegim credencials dels secrets de Streamlit (o demanem que les posi)
+client_id     = st.secrets.get("SPOTIFY_CLIENT_ID", "")
+client_secret = st.secrets.get("SPOTIFY_CLIENT_SECRET", "")
 
-> 🔒 El token és temporal (~1 hora) i no es guarda enlloc. Quan caduca, torna a generar-ne un de nou.
-    """)
+# Si no estan als secrets, les demanem per pantalla (primera configuració)
+if not client_id or not client_secret:
+    with st.expander("⚙️ Configuració inicial (només una vegada)", expanded=True):
+        st.markdown("""
+**Necessites crear una app a Spotify Developer (1 sola vegada):**
 
-    token_input = st.text_input("Token de Spotify:", type="password", placeholder="BQC...")
+1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → **Create app**
+2. Nom: el que vulguis · Redirect URI: `https://generador-bingo-musical.streamlit.app/`
+3. Marca **Web API** → **Save**
+4. A la pàgina de l'app → **Settings** → copia el **Client ID** i el **Client secret**
+        """)
+        client_id     = st.text_input("Client ID:", placeholder="a1b2c3...")
+        client_secret = st.text_input("Client Secret:", type="password", placeholder="x9y8z7...")
+        if not client_id or not client_secret:
+            st.stop()
 
-    if st.button("Connectar"):
-        if not token_input.strip():
-            st.warning("Enganxa el token de Spotify.")
-        else:
-            try:
-                sp_test = spotipy.Spotify(auth=token_input.strip())
-                sp_test.current_user()  # comprova que el token és vàlid
-                st.session_state['sp'] = sp_test
-                st.success("✅ Connectat correctament!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Token invàlid o caducat: {e}")
+# Gestionem el flux OAuth
+oauth = SpotifyOAuth(
+    client_id=client_id,
+    client_secret=client_secret,
+    redirect_uri=REDIRECT_URI,
+    scope=SCOPES,
+    cache_handler=spotipy.cache_handler.MemoryCacheHandler(),
+    show_dialog=False,
+)
 
-# ── Resta de l'app (només si hi ha connexió) ─────────────────────────────────
-if 'sp' not in st.session_state:
-    st.info("Introdueix les teves credencials de Spotify per continuar.")
+# Si tornem del login de Spotify, tenim ?code=... a la URL
+params = st.query_params
+if "code" in params and "sp" not in st.session_state:
+    try:
+        token_info = oauth.get_access_token(params["code"], as_dict=True)
+        st.session_state["sp"] = spotipy.Spotify(auth=token_info["access_token"])
+        st.session_state["token_info"] = token_info
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error(f"Error en el login: {e}")
+
+# Renovem el token si ha caducat
+if "token_info" in st.session_state:
+    if oauth.is_token_expired(st.session_state["token_info"]):
+        try:
+            token_info = oauth.refresh_access_token(st.session_state["token_info"]["refresh_token"])
+            st.session_state["sp"] = spotipy.Spotify(auth=token_info["access_token"])
+            st.session_state["token_info"] = token_info
+        except Exception:
+            del st.session_state["sp"]
+            del st.session_state["token_info"]
+
+# Panell de connexió
+if "sp" not in st.session_state:
+    st.info("Connecta el teu compte de Spotify per continuar.")
+    auth_url = oauth.get_authorize_url()
+    st.link_button("🟢 Iniciar sessió amb Spotify", auth_url, use_container_width=True)
     st.stop()
+
+# Botó de desconnexió + nom d'usuari
+col1, col2 = st.columns([5, 1])
+with col2:
+    if st.button("Tancar sessió"):
+        del st.session_state["sp"]
+        del st.session_state["token_info"]
+        st.rerun()
+with col1:
+    try:
+        user = st.session_state["sp"].current_user()
+        st.success(f"✅ Connectat com **{user.get('display_name', user.get('id'))}**")
+    except Exception:
+        pass
 
 sp = st.session_state['sp']
 
