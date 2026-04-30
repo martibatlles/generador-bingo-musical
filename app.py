@@ -1,6 +1,5 @@
 import streamlit as st
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, FrameBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -10,10 +9,6 @@ from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
-import urllib.parse
-
-REDIRECT_URI = "https://generador-bingo-musical.streamlit.app/"
-SCOPE = "playlist-read-private playlist-read-collaborative"
 
 # ── PDF llista de cançons ─────────────────────────────────────────────────────
 def generar_pdf(titol_event, cancons):
@@ -215,77 +210,34 @@ def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
 # ── Interfície Streamlit ──────────────────────────────────────────────────────
 st.title("🎵 Generador de Bingo Musical")
 
-# ── Pas 1: credencials ────────────────────────────────────────────────────────
-with st.expander("🔑 Configura les teves credencials de Spotify", expanded='token_info' not in st.session_state):
+# ── Pas 1: token ──────────────────────────────────────────────────────────────
+with st.expander("🔑 Connecta amb Spotify", expanded='sp' not in st.session_state):
     st.markdown("""
-**Com obtenir les teves credencials (és ràpid, només cal fer-ho un cop):**
+**Com obtenir el teu token de Spotify (1 minut, sense instal·lar res):**
 
-1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) i inicia sessió amb el teu compte de Spotify
-2. Clica **Create app** i omple els camps:
-   - **App name:** el que vulguis (ex: *Bingo Musical*)
-   - **App description:** el que vulguis (ex: *Tool to extract the title and artist of each song in a playlist.*)
-   - **Redirect URI:** `https://generador-bingo-musical.streamlit.app/`
-   - **API used:** marca ✅ **Web API**
-3. Accepta els termes i clica **Save**
-4. Dins l'app creada, clica **Settings** → aquí trobaràs el **Client ID** i el **Client Secret**
+1. Ves a [developer.spotify.com/console/get-playlist-items](https://developer.spotify.com/console/get-playlist-items) i inicia sessió
+2. Clica el botó verd **"Get token"**
+3. Marca els permisos: ✅ `playlist-read-private` i ✅ `playlist-read-collaborative`
+4. Clica **"Request token"** → inicia sessió si cal
+5. Copia el token llarg que apareix al camp **"OAuth Token"** i enganxa'l aquí:
 
-> 🔒 **Les teves credencials no queden registrades enlloc.** Només s'utilitzen localment en el teu navegador durant aquesta sessió i desapareixen quan tanques la pestanya.
+> 🔒 El token és temporal (~1 hora) i no es guarda enlloc. Quan caduca, torna a generar-ne un de nou.
     """)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        input_id = st.text_input("Client ID", type="password", key="input_client_id")
-    with col2:
-        input_secret = st.text_input("Client Secret", type="password", key="input_client_secret")
+    token_input = st.text_input("Token de Spotify:", type="password", placeholder="BQC...")
 
-    if st.button("Connectar amb Spotify"):
-        if not input_id.strip() or not input_secret.strip():
-            st.warning("Introdueix el Client ID i el Client Secret.")
+    if st.button("Connectar"):
+        if not token_input.strip():
+            st.warning("Enganxa el token de Spotify.")
         else:
-            st.session_state['client_id'] = input_id.strip()
-            st.session_state['client_secret'] = input_secret.strip()
-            # Genera l'URL d'autorització i redirigeix l'usuari
-            auth_manager = SpotifyOAuth(
-                client_id=input_id.strip(),
-                client_secret=input_secret.strip(),
-                redirect_uri=REDIRECT_URI,
-                scope=SCOPE,
-                open_browser=False,
-                cache_handler=spotipy.cache_handler.MemoryCacheHandler()
-            )
-            auth_url = auth_manager.get_authorize_url()
-            st.markdown(f"""
-**Ara has d'autoritzar l'accés a Spotify:**
-
-👉 [**Clica aquí per iniciar sessió a Spotify**]({auth_url})
-
-Després de fer login, Spotify et redirigirà de tornada aquí. Copia l'adreça completa de la barra del navegador i enganxa-la a sota:
-            """)
-            st.session_state['auth_manager'] = auth_manager
-
-    # Camp per enganxar la URL de callback
-    if 'auth_manager' in st.session_state and 'token_info' not in st.session_state:
-        callback_url = st.text_input(
-            "Enganxa aquí la URL sencera de la barra del navegador després del login:",
-            placeholder="https://generador-bingo-musical.streamlit.app/?code=AQC..."
-        )
-        if callback_url and callback_url.strip().startswith("http"):
             try:
-                parsed = urllib.parse.urlparse(callback_url.strip())
-                params = urllib.parse.parse_qs(parsed.query)
-                code = params.get('code', [None])[0]
-                if code:
-                    auth_manager = st.session_state['auth_manager']
-                    token_info = auth_manager.get_access_token(code, as_dict=True)
-                    st.session_state['token_info'] = token_info
-                    sp = spotipy.Spotify(auth=token_info['access_token'])
-                    st.session_state['sp'] = sp
-                    st.success("✅ Connectat correctament! Ja pots usar les teves playlists.")
-                    st.rerun()
-                else:
-                    st.error("No s'ha trobat el codi d'autorització a la URL. Assegura't de copiar-la sencera.")
+                sp_test = spotipy.Spotify(auth=token_input.strip())
+                sp_test.current_user()  # comprova que el token és vàlid
+                st.session_state['sp'] = sp_test
+                st.success("✅ Connectat correctament!")
+                st.rerun()
             except Exception as e:
-                st.error(f"Error processant la URL: {e}")
+                st.error(f"Token invàlid o caducat: {e}")
 
 # ── Resta de l'app (només si hi ha connexió) ─────────────────────────────────
 if 'sp' not in st.session_state:
@@ -297,6 +249,7 @@ sp = st.session_state['sp']
 st.write("Enganxa una playlist de Spotify i genera la llista i els cartrons de bingo.")
 
 titol_event = st.text_input("Títol de l'esdeveniment:", placeholder="Ex: Vermut AEIG Sant Pius Xè")
+
 playlist_url = st.text_input("URL de la Playlist de Spotify:")
 
 if playlist_url:
