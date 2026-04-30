@@ -214,15 +214,18 @@ st.title("🎵 Generador de Bingo Musical")
 # ── Panell de credencials ─────────────────────────────────────────────────────
 with st.expander("🔑 Configura les teves credencials de Spotify", expanded='sp' not in st.session_state):
     st.markdown("""
-**Com obtenir les teves credencials:**
+**Com obtenir les teves credencials (és ràpid, només cal fer-ho un cop):**
 
-1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) i inicia sessió
-2. Clica **Create app**
-3. Posa qualsevol nom i descripció. A *Redirect URIs* afegeix `http://127.0.0.1:8501`
-4. Accepta els termes i clica **Save**
-5. Dins l'app creada, clica **Settings** → aquí trobaràs el **Client ID** i el **Client Secret**
+1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) i inicia sessió amb el teu compte de Spotify
+2. Clica **Create app** i omple els camps:
+   - **App name:** el que vulguis (ex: *Bingo Musical*)
+   - **App description:** el que vulguis (ex: *Tool to extract the title and artist of each song in a playlist.*)
+   - **Redirect URI:** `https://generador-bingo-musical.streamlit.app/`
+   - **API used:** marca ✅ **Web API**
+3. Accepta els termes i clica **Save**
+4. Dins l'app creada, clica **Settings** → aquí trobaràs el **Client ID** i el **Client Secret**
 
-> 🔒 **Les teves credencials no queden registrades enlloc.** Només s'utilitzen localment durant aquesta sessió per connectar-se a la teva compte de Spotify i desapareixen quan tanques la pestanya.
+> 🔒 **Les teves credencials no queden registrades enlloc.** Només s'utilitzen localment en el teu navegador durant aquesta sessió i desapareixen quan tanques la pestanya.
     """)
 
     col1, col2 = st.columns(2)
