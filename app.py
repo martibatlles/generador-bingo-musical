@@ -212,28 +212,11 @@ def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
 st.title("🎵 Generador de Bingo Musical")
 
 # ── Pas 1: OAuth amb Spotify ──────────────────────────────────────────────────
-REDIRECT_URI = "https://generador-bingo-musical.streamlit.app/"
 SCOPES = "playlist-read-private playlist-read-collaborative"
 
-# Llegim credencials dels secrets de Streamlit (o demanem que les posi)
-client_id     = st.secrets.get("SPOTIFY_CLIENT_ID", "")
-client_secret = st.secrets.get("SPOTIFY_CLIENT_SECRET", "")
-
-# Si no estan als secrets, les demanem per pantalla (primera configuració)
-if not client_id or not client_secret:
-    with st.expander("⚙️ Configuració inicial (només una vegada)", expanded=True):
-        st.markdown("""
-**Necessites crear una app a Spotify Developer (1 sola vegada):**
-
-1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → **Create app**
-2. Nom: el que vulguis · Redirect URI: `https://generador-bingo-musical.streamlit.app/`
-3. Marca **Web API** → **Save**
-4. A la pàgina de l'app → **Settings** → copia el **Client ID** i el **Client secret**
-        """)
-        client_id     = st.text_input("Client ID:", placeholder="a1b2c3...")
-        client_secret = st.text_input("Client Secret:", type="password", placeholder="x9y8z7...")
-        if not client_id or not client_secret:
-            st.stop()
+client_id     = st.secrets["CLIENT_ID"]
+client_secret = st.secrets["CLIENT_SECRET"]
+REDIRECT_URI  = st.secrets["REDIRECT_URI"]
 
 # Gestionem el flux OAuth
 oauth = SpotifyOAuth(
