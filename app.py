@@ -1,6 +1,6 @@
 import streamlit as st
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyOAuth
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, FrameBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -11,7 +11,10 @@ from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
 
+st.set_page_config(page_title="Bingo Musical", page_icon="🎵")
+
 # ── PDF llista de cançons ─────────────────────────────────────────────────────
+# (Aquesta part queda exactament igual que la teva)
 def generar_pdf(titol_event, cancons):
     buffer = io.BytesIO()
     page_w, page_h = A4
@@ -26,8 +29,7 @@ def generar_pdf(titol_event, cancons):
     doc = BaseDocTemplate(buffer, pagesize=A4)
     doc.addPageTemplates([PageTemplate(id='TwoCol', frames=[frame_titol, frame_esq, frame_dre])])
     styles = getSampleStyleSheet()
-    estil_titol = ParagraphStyle('Titol', parent=styles['Title'], fontSize=20, spaceAfter=0,
-        textColor=colors.black, fontName='Helvetica-Bold')
+    estil_titol = ParagraphStyle('Titol', parent=styles['Title'], fontSize=20, spaceAfter=0, textColor=colors.black, fontName='Helvetica-Bold')
     estil_canco = ParagraphStyle('Canco', parent=styles['Normal'], fontSize=9, leading=13, fontName='Helvetica')
     story = [Paragraph(titol_event, estil_titol), FrameBreak()]
     meitat = (len(cancons) + 1) // 2
@@ -77,35 +79,29 @@ def _genera_cartrons_unics(num_cancons, num_cartrons):
                 break
     return cartrons
 
-# ── PDF cartrons amb NÚMEROS ──────────────────────────────────────────────────
+# ── PDF cartrons amb NÚMEROS i TÍTOLS ─────────────────────────────────────────
 def generar_cartrons_nums(titol_event, num_cancons, num_cartrons):
     buffer = io.BytesIO()
     page_w, page_h = A4
     c = rl_canvas.Canvas(buffer, pagesize=A4)
     COLS_GRID, FILES_GRID, marge_ext, col_gap, fila_gap, capçalera, cartro_w, cartro_h, cel_w, cel_h = _setup_cartro(page_w, page_h)
-    color_clar  = colors.HexColor('#dce9f7')
-    color_fosc  = colors.HexColor('#b8d0ed')
-    color_borde = colors.HexColor('#5a8fc2')
-    color_petit = colors.HexColor('#5a8fc2')
+    color_clar, color_fosc, color_borde, color_petit = colors.HexColor('#dce9f7'), colors.HexColor('#b8d0ed'), colors.HexColor('#5a8fc2'), colors.HexColor('#5a8fc2')
 
     def dibuixa_cartro(c, x0, y0, numeros, num_cartro):
         c.setFont('Helvetica-Bold', 7)
         c.setFillColor(color_petit)
         c.drawString(x0, y0 + cartro_h + 2, f"Cartró nº {num_cartro}  |  {titol_event}")
         for idx, num in enumerate(numeros):
-            ci = idx % COLS_GRID
-            fi = idx // COLS_GRID
-            cx = x0 + ci * cel_w
-            cy = y0 + cartro_h - (fi + 1) * cel_h
+            ci, fi = idx % COLS_GRID, idx // COLS_GRID
+            cx, cy = x0 + ci * cel_w, y0 + cartro_h - (fi + 1) * cel_h
             c.setFillColor(color_clar if (ci + fi) % 2 == 0 else color_fosc)
             c.rect(cx, cy, cel_w, cel_h, fill=1, stroke=0)
             c.setStrokeColor(color_borde)
             c.setLineWidth(0.5)
             c.rect(cx, cy, cel_w, cel_h, fill=0, stroke=1)
-            mida_petit = 8
             c.setFillColor(color_petit)
-            c.setFont('Helvetica', mida_petit)
-            c.drawString(cx + 3, cy + cel_h - mida_petit - 2, str(num))
+            c.setFont('Helvetica', 8)
+            c.drawString(cx + 3, cy + cel_h - 10, str(num))
             mida_gran = int(cel_h * 0.55)
             c.setFont('Helvetica-Bold', mida_gran)
             c.setFillColor(colors.black)
@@ -116,150 +112,121 @@ def generar_cartrons_nums(titol_event, num_cancons, num_cartrons):
 
     cartrons = _genera_cartrons_unics(num_cancons, num_cartrons)
     for i, nums in enumerate(cartrons):
-        slot = i % 6
-        if slot == 0 and i > 0:
-            c.showPage()
-        x0, y0 = _posicio(slot, marge_ext, cartro_w, col_gap, capçalera, cartro_h, fila_gap, page_h)
+        if i % 6 == 0 and i > 0: c.showPage()
+        x0, y0 = _posicio(i % 6, marge_ext, cartro_w, col_gap, capçalera, cartro_h, fila_gap, page_h)
         dibuixa_cartro(c, x0, y0, nums, i + 1)
     c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
 
-# ── PDF cartrons amb TÍTOLS ───────────────────────────────────────────────────
 def generar_cartrons_text(titol_event, cancons_tuples, num_cartrons):
     buffer = io.BytesIO()
     page_w, page_h = A4
     c = rl_canvas.Canvas(buffer, pagesize=A4)
     COLS_GRID, FILES_GRID, marge_ext, col_gap, fila_gap, capçalera, cartro_w, cartro_h, cel_w, cel_h = _setup_cartro(page_w, page_h)
-    color_clar  = colors.HexColor('#dce9f7')
-    color_fosc  = colors.HexColor('#b8d0ed')
-    color_borde = colors.HexColor('#5a8fc2')
-    color_cap   = colors.HexColor('#5a8fc2')
-    num_cancons = len(cancons_tuples)
+    color_clar, color_fosc, color_borde, color_cap = colors.HexColor('#dce9f7'), colors.HexColor('#b8d0ed'), colors.HexColor('#5a8fc2'), colors.HexColor('#5a8fc2')
 
     def dibuixa_cartro_text(c, x0, y0, numeros, num_cartro):
         c.setFont('Helvetica-Bold', 7)
         c.setFillColor(color_cap)
         c.drawString(x0, y0 + cartro_h + 2, f"Cartró nº {num_cartro}  |  {titol_event}")
         for idx, num in enumerate(numeros):
-            ci = idx % COLS_GRID
-            fi = idx // COLS_GRID
-            cx = x0 + ci * cel_w
-            cy = y0 + cartro_h - (fi + 1) * cel_h
+            ci, fi = idx % COLS_GRID, idx // COLS_GRID
+            cx, cy = x0 + ci * cel_w, y0 + cartro_h - (fi + 1) * cel_h
             c.setFillColor(color_clar if (ci + fi) % 2 == 0 else color_fosc)
             c.rect(cx, cy, cel_w, cel_h, fill=1, stroke=0)
             c.setStrokeColor(color_borde)
             c.setLineWidth(0.5)
             c.rect(cx, cy, cel_w, cel_h, fill=0, stroke=1)
             nom, artista = cancons_tuples[num - 1]
-            padding = 4
-            max_w = cel_w - 2 * padding
-            mida_nom = 7.5
-            mida_art = 6
-
             def wrap_text(text, font, mida, max_w):
                 words = text.split()
-                lines = []
-                current = ''
+                lines, current = [], ''
                 for word in words:
                     test = (current + ' ' + word).strip()
-                    if c.stringWidth(test, font, mida) <= max_w:
-                        current = test
+                    if c.stringWidth(test, font, mida) <= max_w: current = test
                     else:
-                        if current:
-                            lines.append(current)
+                        if current: lines.append(current)
                         current = word
-                if current:
-                    lines.append(current)
+                if current: lines.append(current)
                 return lines
-
-            nom_lines = wrap_text(nom, 'Helvetica-Bold', mida_nom, max_w)
-            art_lines = wrap_text(artista, 'Helvetica', mida_art, max_w) if artista else []
-            lh_nom = mida_nom + 1.5
-            lh_art = mida_art + 1.5
-            total_h = len(nom_lines) * lh_nom + (len(art_lines) * lh_art + 2 if art_lines else 0)
+            nom_lines = wrap_text(nom, 'Helvetica-Bold', 7.5, cel_w - 8)
+            art_lines = wrap_text(artista, 'Helvetica', 6, cel_w - 8) if artista else []
+            total_h = len(nom_lines) * 9 + (len(art_lines) * 7.5 + 2 if art_lines else 0)
             y_start = cy + (cel_h + total_h) / 2
-            c.setFont('Helvetica-Bold', mida_nom)
+            c.setFont('Helvetica-Bold', 7.5)
             c.setFillColor(colors.black)
             for line in nom_lines:
-                y_start -= lh_nom
+                y_start -= 9
                 c.drawCentredString(cx + cel_w / 2, y_start, line)
             if art_lines:
                 y_start -= 2
-                c.setFont('Helvetica', mida_art)
+                c.setFont('Helvetica', 6)
                 c.setFillColor(colors.HexColor('#333333'))
                 for line in art_lines:
-                    y_start -= lh_art
+                    y_start -= 7.5
                     c.drawCentredString(cx + cel_w / 2, y_start, line)
         c.setStrokeColor(color_borde)
         c.setLineWidth(1.5)
         c.rect(x0, y0, cartro_w, cartro_h, fill=0, stroke=1)
 
-    cartrons = _genera_cartrons_unics(num_cancons, num_cartrons)
+    cartrons = _genera_cartrons_unics(len(cancons_tuples), num_cartrons)
     for i, nums in enumerate(cartrons):
-        slot = i % 6
-        if slot == 0 and i > 0:
-            c.showPage()
-        x0, y0 = _posicio(slot, marge_ext, cartro_w, col_gap, capçalera, cartro_h, fila_gap, page_h)
+        if i % 6 == 0 and i > 0: c.showPage()
+        x0, y0 = _posicio(i % 6, marge_ext, cartro_w, col_gap, capçalera, cartro_h, fila_gap, page_h)
         dibuixa_cartro_text(c, x0, y0, nums, i + 1)
     c.showPage()
     c.save()
     buffer.seek(0)
     return buffer
 
-# ── Interfície Streamlit ──────────────────────────────────────────────────────
+# ── LOGÍSTICA DE L'OAUTH A STREAMLIT ──────────────────────────────────────────
 st.title("🎵 Generador de Bingo Musical")
 
-# ── Panell de credencials ─────────────────────────────────────────────────────
-with st.expander("🔑 Configura les teves credencials de Spotify", expanded='sp' not in st.session_state):
-    st.markdown("""
-**Com obtenir les teves credencials (és ràpid, només cal fer-ho un cop):**
+# Agafem les credencials del tauler de control de Streamlit Secrets
+CLIENT_ID = st.secrets["CLIENT_ID"]
+CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
+REDIRECT_URI = st.secrets["REDIRECT_URI"]
 
-1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) i inicia sessió amb el teu compte de Spotify
-2. Clica **Create app** i omple els camps:
-   - **App name:** el que vulguis (ex: *Bingo Musical*)
-   - **App description:** el que vulguis (ex: *Tool to extract the title and artist of each song in a playlist.*)
-   - **Redirect URI:** `https://generador-bingo-musical.streamlit.app/`
-   - **API used:** marca ✅ **Web API**
-3. Accepta els termes i clica **Save**
-4. Dins l'app creada, clica **Settings** → aquí trobaràs el **Client ID** i el **Client Secret**
+# Configurem l'OAuth
+sp_oauth = SpotifyOAuth(
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    redirect_uri=REDIRECT_URI,
+    scope="playlist-read-private playlist-read-collaborative",
+    show_dialog=True
+)
 
-> 🔒 **Les teves credencials no queden registrades enlloc.** Només s'utilitzen localment en el teu navegador durant aquesta sessió i desapareixen quan tanques la pestanya.
-    """)
+# 1. Comprovem si l'usuari acaba de tornar de Spotify amb el codi de validació a la URL
+if "code" in st.query_params:
+    codi_spotify = st.query_params["code"]
+    token_info = sp_oauth.get_access_token(codi_spotify)
+    st.session_state["access_token"] = token_info["access_token"]
+    st.query_params.clear() # Netejem la URL perquè quedi maca
+    st.rerun()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        input_id = st.text_input("Client ID", type="password", key="input_client_id")
-    with col2:
-        input_secret = st.text_input("Client Secret", type="password", key="input_client_secret")
+# 2. Si no tenim token, mostrem el botó d'inici de sessió
+if "access_token" not in st.session_state:
+    st.write("Per llegir les teves llistes privades, has de donar permís al Bingo Musical perquè es connecti amb el teu compte.")
+    url_autoritzacio = sp_oauth.get_authorize_url()
+    st.link_button("🔑 Iniciar sessió amb Spotify", url_autoritzacio)
+    st.stop() # Aturem el codi aquí fins que iniciïn sessió
 
-    if st.button("Connectar amb Spotify"):
-        if not input_id.strip() or not input_secret.strip():
-            st.warning("Introdueix el Client ID i el Client Secret.")
-        else:
-            try:
-                sp_test = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-                    client_id=input_id.strip(),
-                    client_secret=input_secret.strip()
-                ))
-                sp_test.search(q="test", limit=1)  # prova de connexió
-                st.session_state['sp'] = sp_test
-                st.session_state['client_id'] = input_id.strip()
-                st.session_state['client_secret'] = input_secret.strip()
-                st.success("✅ Connectat correctament!")
-            except Exception as e:
-                st.error(f"Error de connexió: {e}")
+# 3. Si arribem aquí, tenim token i podem inicialitzar Spotipy
+sp = spotipy.Spotify(auth=st.session_state["access_token"])
 
-# ── Resta de l'app (només si hi ha connexió) ─────────────────────────────────
-if 'sp' not in st.session_state:
-    st.info("Introdueix les teves credencials de Spotify per continuar.")
-    st.stop()
+col1, col2 = st.columns([4, 1])
+with col1:
+    st.success("Sessió iniciada correctament!")
+with col2:
+    if st.button("Sortir"):
+        del st.session_state["access_token"]
+        st.rerun()
 
-sp = st.session_state['sp']
-
+# ── INTERFÍCIE PRINCIPAL ──────────────────────────────────────────────────────
+st.divider()
 st.write("Enganxa una playlist de Spotify i genera la llista i els cartrons de bingo.")
-st.info("⚠️ La playlist ha de ser de la teva biblioteca de Spotify (creada o guardada al teu compte). Les playlists d'altres usuaris no són accessibles per restriccions de l'API de Spotify.")
 
 titol_event = st.text_input("Títol de l'esdeveniment:", placeholder="Ex: Vermut AEIG Sant Pius Xè")
 playlist_url = st.text_input("URL de la Playlist de Spotify:")
@@ -332,4 +299,4 @@ if playlist_url:
                 file_name="cartrons_titols.pdf", mime="application/pdf", key="dl_text")
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"S'ha produït un error al llegir la llista: {e}")
