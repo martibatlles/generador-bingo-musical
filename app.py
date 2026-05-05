@@ -1,6 +1,6 @@
 import streamlit as st
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyOAuth
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, FrameBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -260,11 +260,12 @@ with st.expander("🔑 Configura les teves credencials de Spotify", expanded='sp
             st.warning("Introdueix el Client ID i el Client Secret.")
         else:
             try:
-                sp_test = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+                sp_test = spotipy.Spotify(auth_manager=SpotifyOAuth(
                     client_id=input_id.strip(),
                     client_secret=input_secret.strip(),
+                    redirect_uri=REDIRECT_URI,
+                    scope="playlist-read-private playlist-read-collaborative"
                 ))
-                sp_test.search(q="test", limit=1)  # prova de connexió
                 st.session_state['sp'] = sp_test
                 st.session_state['client_id'] = input_id.strip()
                 st.session_state['client_secret'] = input_secret.strip()
