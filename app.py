@@ -11,6 +11,8 @@ from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
 
+REDIRECT_URI = "https://generador-bingo-musical.streamlit.app/"
+
 # ── PDF llista de cançons ─────────────────────────────────────────────────────
 def generar_pdf(titol_event, cancons):
     buffer = io.BytesIO()
@@ -235,12 +237,12 @@ st.title("🎵 Generador de Bingo Musical")
 
 # ── Panell de credencials ─────────────────────────────────────────────────────
 with st.expander("🔑 Configura les teves credencials de Spotify", expanded='sp' not in st.session_state):
-    st.markdown("""
+    st.markdown(f"""
 **Com obtenir les teves credencials:**
 
 1. Ves a [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) i inicia sessió
 2. Clica **Create app**
-3. Posa qualsevol nom i descripció. A *Redirect URIs* afegeix `http://127.0.0.1:8501`
+3. Posa qualsevol nom i descripció. A *Redirect URIs* afegeix `{REDIRECT_URI}`
 4. Accepta els termes i clica **Save**
 5. Dins l'app creada, clica **Settings** → aquí trobaràs el **Client ID** i el **Client Secret**
 
