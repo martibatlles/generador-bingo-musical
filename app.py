@@ -11,12 +11,39 @@ from reportlab.pdfgen import canvas as rl_canvas
 import random
 import io
 
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
+from spotipy.cache_handler import MemoryCacheHandler
+
+# Agafem les claus dels secrets (OBLIGATORI per a la web)
+CLIENT_ID = st.secrets["CLIENT_ID"]
+CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
+REDIRECT_URI = st.secrets["REDIRECT_URI"]
+
+# Configurem l'OAuth amb MemoryCacheHandler per evitar l'error de biblioteca compartida
+sp_oauth = SpotifyOAuth(
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
     redirect_uri=REDIRECT_URI,
-    scope="playlist-read-private playlist-read-collaborative"
-))
+    scope="playlist-read-private playlist-read-collaborative",
+    show_dialog=True,
+    cache_handler=MemoryCacheHandler()
+)
+
+# Lògica per obtenir el token de la URL si l'usuari acaba de fer login
+if "code" in st.query_params:
+    token_info = sp_oauth.get_access_token(st.query_params["code"])
+    st.session_state["access_token"] = token_info["access_token"]
+    st.query_params.clear()
+    st.rerun()
+
+# Si no hi ha token, demanem login
+if "access_token" not in st.session_state:
+    st.title("🔑 Inicia sessió")
+    auth_url = sp_oauth.get_authorize_url()
+    st.link_button("Entrar amb Spotify", auth_url)
+    st.stop()
+
+# Creem l'objecte sp amb el token de l'usuari actual
+sp = spotipy.Spotify(auth=st.session_state["access_token"])
 
 # ── PDF llista de cançons ─────────────────────────────────────────────────────
 def generar_pdf(titol_event, cancons):
